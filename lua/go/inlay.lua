@@ -16,6 +16,11 @@ local inlay_display = vim.fn.has('nvim-0.10') == 1
 if type(vim.lsp.inlay_hint) == 'function' then
   utils.warn('unsupported neovim nightly, please upgrade')
 end
+if not vim.g.GO_NVIM_INLAY_HINTS_INITIALIZED then
+  vim.g.GO_NVIM_INLAY_HINTS_NOT_INITIALIZED = true
+  -- set initial state for inlay state that persists between buffers
+  vim.g.GO_NVIM_CURRENT_INLAY_STATE = not _GO_NVIM_CFG.lsp_inlay_hints.disabled_at_startup
+end
 
 -- local inlay_display = true
 -- whether the hints are enabled or not
@@ -43,7 +48,7 @@ function M.setup()
     pattern = { '*.go', '*.mod' },
     callback = function()
       if not vim.wo.diff and enabled[bufnr] then
-        require('go.inlay').set_inlay_hints()
+        require('go.inlay').set_inlay_hints(false)
       end
     end,
   })
@@ -56,13 +61,14 @@ function M.setup()
           local inlay = require('go.inlay')
           inlay.disable_inlay_hints(true)
           if enabled[tostring(vim.api.nvim_get_current_buf())] then
-            inlay.set_inlay_hints()
+            inlay.set_inlay_hints(false)
           end
         end
       end,
     })
   end
 
+<<<<<<< Updated upstream
   if not config.enable then -- disabled
     M.disable_inlay_hints(true)
     return
@@ -74,6 +80,14 @@ function M.setup()
   vim.defer_fn(function()
     require('go.inlay').set_inlay_hints()
   end, 100)
+=======
+  api.nvim_create_user_command('GoToggleInlay', function(_)
+    M.toggle_inlay_hints()
+  end, { desc = 'toggle gopls inlay hints' })
+  vim.defer_fn(function()
+    M.set_inlay_hints()
+  end, 1000)
+>>>>>>> Stashed changes
 end
 
 local function get_params()
@@ -280,11 +294,28 @@ local function handler(err, result, ctx)
   end
 end
 
+-- local first_exec = true
+
 function M.toggle_inlay_hints()
   local bufnr = vim.api.nvim_get_current_buf()
   local bfnrstr = tostring(bufnr)
   if inlay_display then
-    vim.lsp.inlay_hint.enable(not enabled[bfnrstr], { bufnr = bufnr })
+    -- if first_exec and _GO_NVIM_CFG.lsp_inlay_hints.disabled_at_startup then
+    --   print('hi there')
+    --   first_exec = false
+    --   local wrap = utils.throttle(function()
+    --     vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+    --     enabled[bfnrstr] = true
+    --     vim.g.GO_NVIM_CURRENT_INLAY_STATE = true
+    --   end, 300)
+    --   wrap()
+    -- else
+    local desired_inlay_state = not enabled[bfnrstr]
+    print(desired_inlay_state)
+    vim.g.GO_NVIM_CURRENT_INLAY_STATE = desired_inlay_state
+    enabled[bfnrstr] = desired_inlay_state
+    vim.lsp.inlay_hint.enable(desired_inlay_state, { bufnr = bufnr })
+    -- end
   else
     -- old version of neovim, will remove when 0.10 is stable
     if enabled[bfnrstr] then
@@ -316,10 +347,11 @@ end
 
 -- Sends the request to gopls to get the inlay hints and handle them
 function M.set_inlay_hints()
+  local bufnr = vim.api.nvim_get_current_buf()
+  print('triggered for entry:', bufnr)
   if vim.wo.diff then
     return
   end
-  local bufnr = vim.api.nvim_get_current_buf()
   -- check if lsp is ready
   if not require('go.lsp').client() then
     return
@@ -327,7 +359,17 @@ function M.set_inlay_hints()
   local fname = fn.expand('%:p')
   local filetime = fn.getftime(fname)
   if inlay_display then
+    local bfnrstr = tostring(bufnr)
+
+    if vim.g.GO_NVIM_CURRENT_INLAY_STATE == false then
+      vim.lsp.inlay_hint.enable(false, { bufnr = bufnr })
+      enabled[bfnrstr] = false
+      return
+    end
+
     local wrap = utils.throttle(function()
+      print('triggered for:', bufnr)
+      vim.g.GO_NVIM_CURRENT_INLAY_STATE = true
       vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
       should_update[fname] = filetime
     end, 300)

@@ -86,6 +86,7 @@ _GO_NVIM_CFG = {
   -- deprecated setups for nvim version < 0.10
   lsp_inlay_hints = {
     enable = true,
+    disabled_at_startup = false,
     style = 'inlay', -- 'default: inlay', 'eol': show at end of line, 'inlay': show in the middle of the line
 
     -- Note: following setup only for for style == 'eol'
